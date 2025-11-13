@@ -99,4 +99,4 @@ Se evaluará tu solución con base en los siguientes pilares:
 Debes entregar la URL de un repositorio de Git (GitHub) con el código fuente completo. El `README.md` debe incluir instrucciones detalladas para la instalación (`npm install`), ejecución del proyecto (`npm run dev`) y ejecución de la suite de pruebas (`npm run test`).
 
 
-Moraleja: Esto es caspasa, se puede ir pa su casa ya
+Moraleja: Esto es caspa, se puede ir pa su casa ya
