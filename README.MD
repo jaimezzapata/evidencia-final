@@ -1,102 +1,144 @@
-# Prueba Técnica: React Sénior/Lead - Dashboard de Agregación de Mercados (FTS)
+# Desafío de Arquitectura de Frontend: "Proyecto Quasar" - El Framework de Composición de Finanzas
 
-## 1. Contexto del Desafío (El Escenario)
+## 1. El Contexto del Negocio y El Escenario Técnico
 
-Somos "FinTech Synthetic Solutions" (FTS), una plataforma que provee datos de mercado de alta frecuencia. Nuestro producto principal es un *dashboard* de agregación que consume múltiples fuentes de datos (REST, GraphQL, WebSockets) y las presenta en una interfaz unificada, reactiva y de rendimiento crítico.
+Has sido seleccionado para liderar como Arquitecto de Frontend (Staff/Principal Engineer) el "Proyecto Quasar".
 
-El *stack* tecnológico actual de nuestro *legacy* (basado en `useEffect` y Redux monolítico) está fallando en escalar, presentando cuellos de botella en el *render pipeline* y una gestión de estado asíncrono insostenible.
+"Quasar" no es una aplicación; es una **plataforma de composición de UI en tiempo real** para instituciones financieras de primer nivel (Tier 1). Nuestra base de código única de React debe ser capaz de generar cientos de *aplicaciones de trading* distintas y de marca blanca (white-label) para nuestros clientes (bancos, fondos de cobertura).
 
-Tu misión es construir el prototipo de la v2 de este *dashboard*, demostrando maestría en la arquitectura de aplicaciones React modernas, gestión de estado de servidor de alta complejidad y optimización de rendimiento a nivel de milisegundos.
+La plataforma es un *dashboard* "infinito" donde los usuarios finales (traders) pueden componer su espacio de trabajo arrastrando y soltando *widgets* (módulos). Estos módulos son desarrollados y desplegados de forma independiente por más de 10 equipos de ingeniería (escuadrones) especializados (ej. Gráficos de Mercado, Análisis de Sentimiento, Ejecución de Órdenes, Noticias en Vivo, Cumplimiento Normativo).
 
----
+### Los 5 Pilares del Desafío Arquitectónico:
 
-## 2. Definición de las Fuentes de Datos (Mock)
+1.  **Federación Masiva (MFE):** Cientos de módulos (Micro-Frontends o MFEs) deben coexistir y ser cargados dinámicamente en tiempo de ejecución.
+2.  **Multitenancy y Composición:** Cada cliente (inquilino) tiene una configuración única de *features*, *branding* (temas) y permisos. La plataforma debe componerse a sí misma en el *runtime* basándose en el perfil del cliente.
+3.  **Estado Colaborativo y Sincronización:** Los *dashboards* son colaborativos. Un analista en Londres y un *trader* en Nueva York pueden estar modificando el *mismo* *layout* de *dashboard* simultáneamente.
+4.  **Rendimiento Extremo (Zero-Lag):** En el mundo del *trading*, milisegundos importan. La plataforma debe manejar miles de actualizaciones de datos por segundo (vía WebSockets) sin degradar el *main thread* de la UI.
+5.  **Resiliencia y Modo Offline:** Las conexiones de los clientes son poco fiables. La aplicación debe ofrecer una experiencia robusta en modo *offline* o de baja conectividad (lectura de datos cacheados, cola de comandos).
 
-Deberás simular (o *mockear* con MSW) tres servicios de API distintos:
+## 2. El Entregable: Dos Fases (El Manifiesto y El Núcleo)
 
-1.  **API REST (Legacy Market Data):**
-    * `GET /api/v1/markets?page={number}&limit={number}`
-    * Respuesta paginada (`{ data: [Market...], meta: { totalPages, currentPage } }`).
-    * Devuelve una lista de miles de instrumentos financieros (ej. 10,000+ ítems).
-    * `Market { id: string, name: string, baseCurrency: string, quoteCurrency: string }`
-
-2.  **API GraphQL (Portfolio & User Data):**
-    * `POST /api/graphql`
-    * Un *endpoint* que expone el *schema* de portafolios de usuario.
-    * Permite `Query` para `userPortfolio` (que incluye `watchlists`) y `Mutation` para `addToWatchlist` y `removeFromWatchlist`.
-
-3.  **API WebSocket (Real-Time Price Ticker):**
-    * `wss://api.example.com/stream`
-    * Un *stream* que emite continuamente actualizaciones de precios en formato JSON.
-    * `{ type: 'PRICE_UPDATE', payload: { marketId: string, price: number, timestamp: number } }`
+Tu tarea se divide en dos entregables críticos que deben presentarse a un comité de arquitectura (tus pares).
 
 ---
 
-## 3. Requisitos Funcionales y Técnicos (El Núcleo)
+### FASE 1: El Manifiesto de Arquitectura (El Documento de Diseño)
 
-### RF-01: El "Market Grid" Virtualizado (Manejo de REST)
+(Formato: `ARCHITECTURE.md` en la raíz del repositorio)
 
-El componente principal será una tabla (o cuadrícula) que muestre todos los mercados disponibles desde la API REST.
+Este documento es el entregable más importante. Debe justificar todas las decisiones arquitectónicas fundamentales que permitirán a 10 equipos trabajar en paralelo. Debe ser extenso, detallado y anticipar problemas de segundo y tercer orden.
 
-* **Técnico (Data Fetching):** Debes usar **TanStack Query (React Query)** para gestionar el estado de esta API.
-* **Técnico (Infinite Loading):** Dado el volumen de datos, debes implementar **`useInfiniteQuery`** para *lazy loading* de los datos a medida que el usuario hace *scroll* (desplazamiento infinito), en lugar de paginación tradicional.
-* **Técnico (Rendimiento de Renderizado):** Es **mandatorio** implementar **virtualización de listas** (ej. `@tanstack/react-virtual` o `react-window`) para el *grid*. El DOM **no debe** contener nodos para los ítems que no están actualmente en el *viewport*.
+#### Sección 1: Estrategia de Federación y Composición del "Shell"
 
-### RF-02: Hidratación del Estado en Tiempo Real (Manejo de WebSockets)
+1.  **Modelo de Federación:**
+    * **Decisión:** Elige y justifica tu estrategia de federación de módulos (ej. Webpack 5 Module Federation, Vite + ES Modules nativos, iFrames controlados, o una solución de *build-time* como los *workspaces* de un monorepo).
+    * **Justificación:** Debate los *trade-offs* de tu elección, enfocándote en:
+        * **Aislamiento de Dependencias:** ¿Cómo manejarás las dependencias compartidas (ej. `react`, `react-dom`, `design-system`)? ¿Singleton, múltiples versiones, o un *peer-dependency* forzado? ¿Cómo prevendrás el "infierno de dependencias" de los MFEs?
+        * **Aislamiento de Estilos:** ¿Cómo garantizarás que los estilos de MFE-A no "filtren" y rompan MFE-B? (ej. CSS-in-JS con `StyleSheetManager`, Shadow DOM, CSS Modules con *scoping* forzado).
+        * **Contrato de API del Módulo:** ¿Cómo se "registra" un MFE en la aplicación "Host" (el *shell*)?
 
-El *grid* del RF-01 debe reflejar los precios en tiempo real.
+2.  **El "Servicio de Configuración y Orquestación" (El Director):**
+    * **Diseño:** Describe la arquitectura de un servicio (ya sea un microservicio o un JSON estático) que el *shell* consumirá al arrancar. Este servicio debe definir:
+        * El *layout* del *dashboard* del usuario.
+        * La lista de MFEs a los que tiene acceso (basado en *feature flags* del cliente).
+        * La URL de manifiesto (ej. `remoteEntry.js`) para cada MFE.
+    * **Propagación:** ¿Cómo se propaga esta configuración a través del árbol de React? (¿Contexto, Redux, un *singleton* de Zustand?).
 
-* **Técnico (Conectividad):** Debes establecer y mantener una conexión con el *stream* WebSocket. Se espera que esta lógica esté encapsulada en un *custom hook* (ej. `useMarketStream`) que gestione el ciclo de vida de la conexión (conexión, desconexión, re-conexión).
-* **Técnico (State Hydration):** A medida que se reciben mensajes del WebSocket (`PRICE_UPDATE`), **no debes** disparar un *refetch* de la API. En su lugar, debes actualizar *imperativamente* la caché de React Query (`queryClient.setQueryData`) para inyectar el nuevo precio en el *market* correspondiente.
-* **Técnico (Memoización):** Debes demostrar una estrategia de memoización agresiva (`React.memo`, `useMemo`) en las filas del *grid* para asegurar que solo la fila cuyo precio cambió se vuelva a renderizar, evitando la re-renderización de las miles de otras filas en el *grid* virtualizado.
+#### Sección 2: El Modelo de Estado (La Hidra)
 
-### RF-03: Gestión de Portafolio (Manejo de GraphQL y Mutaciones)
+Esta es la sección más crítica. Debes diseñar una arquitectura de estado de múltiples cabezas.
 
-El usuario debe poder gestionar su *watchlist* personal, la cual se obtiene de la API de GraphQL.
+1.  **Estado del "Host" (Global):**
+    * **Definición:** El estado que el *shell* posee (ej. Auth, perfil del usuario, tema (token de diseño), configuración de red).
+    * **Propagación:** ¿Cómo se proporciona este estado de forma segura y performante a los MFEs (que pueden o no compartir el mismo `React.Context`)?
 
-* **Técnico (Data Fetching GQL):** Debes integrar un cliente de GraphQL (Apollo Client, URQL, o el mismo React Query) para consumir el *endpoint* de GraphQL y obtener el `userPortfolio`.
-* **Técnico (Mutaciones):** El usuario debe poder hacer clic en un ícono "guardar" en el *grid* (RF-01) para añadir ese mercado a su *watchlist*. Esto debe disparar una `Mutation` de GraphQL (`addToWatchlist`).
-* **Técnico (Optimistic UI):** La implementación de `addToWatchlist` **debe** ser una **actualización optimista**. El ícono debe cambiar a "guardado" instantáneamente, *antes* de que el servidor confirme la mutación. La UI debe manejar el *rollback* (reversión) en caso de que la mutación falle.
-* **Técnico (Invalidación de Caché):** Tras una mutación exitosa (o un *refetch* tras un *rollback* fallido), la caché del `userPortfolio` (la *query* de GraphQL) debe ser invalidada para asegurar la consistencia de los datos.
+2.  **Estado Compartido (Comunicación Inter-MFE):**
+    * **El Problema:** MFE "Watchlist" emite un `ASSET_SELECTED: 'AAPL'`. MFE "Gráficos" y MFE "Noticias" deben reaccionar a esto, sin que "Watchlist" sepa que existen.
+    * **Diseño:** Propón un patrón de comunicación desacoplado. ¿Un Bus de Eventos (`CustomEvent`) en el objeto `window`? ¿Un *hook* (`useGlobalEvent`) que abstrae un *singleton* de `tiny-emitter`? ¿Un *slice* de estado compartido en un *store* global de Zustand/Redux? Justifica los *trade-offs* en términos de *type-safety* (seguridad de tipos) y rastreabilidad (debugging).
 
-### RF-04: Arquitectura, Pruebas y Rendimiento
+3.  **Estado Efímero (UI Local):**
+    * ¿Cómo forzarás (o recomendarás) a los equipos de MFE que gestionen su propio estado interno (ej. `useState`, `useReducer`) para prevenir la contaminación del *store* global?
 
-* **Técnico (Code Splitting):** La vista de "Portafolio Detallado" (que consume GraphQL) debe ser un componente cargado de forma diferida (lazy loaded) usando `React.lazy()` y `Suspense` para dividir el *bundle* de la aplicación.
-* **Técnico (Bundling):** El proyecto debe ser inicializado usando **Vite**. No se acepta Create React App (CRA).
-* **Técnico (Testing - Mocking):** Es **mandatorio** el uso de **Mock Service Worker (MSW)** para interceptar y *mockear* todas las peticiones (REST y GraphQL) a nivel de red para las pruebas.
-* **Técnico (Testing - Integration):** Debes escribir pruebas de integración (React Testing Library) que cubran el flujo completo del RF-03 (renderizar el *grid*, simular clic en "guardar", verificar la UI optimista y el *mock* de la mutación).
-* **Técnico (Testing - Hooks):** Debes incluir pruebas unitarias (Vitest/Jest) para el *hook* `useMarketStream` (RF-02), *mockeando* la dependencia del WebSocket (`mock-socket` o similar).
-* **Técnico (Error Handling):** Debes implementar `ErrorBoundary` (componentes de frontera de error) de React para gestionar fallos catastróficos en el *render* del *grid* o del portafolio.
+4.  **Estado del Servidor (Data Fetching):**
+    * **Estrategia:** Asumiendo el uso de **TanStack Query (React Query)**, ¿cómo gestionarás la *query cache*?
+    * **Desafío:** Si MFE-A y MFE-B hacen `useQuery(['user-portfolio'])`, ¿compartirán la misma entrada de caché? ¿Cómo manejarás la invalidación de caché iniciada desde *otro* MFE? Propón un patrón para una `QueryClient` global inyectada.
+
+5.  **Estado Colaborativo (Tiempo Real - CRDTs):**
+    * **El Desafío:** El *layout* del *dashboard* (la posición y tamaño de los *widgets*) es un estado colaborativo.
+    * **Diseño:** Propón una arquitectura para manejar la sincronización de estado concurrente. No es necesario implementar CRDTs, pero debes describir el flujo:
+        * ¿Usarías un WebSocket "tonto" (LWW - Last-Write-Wins) o una biblioteca de CRDT (ej. `Yjs`, `Automerge`)?
+        * Dibuja un diagrama de secuencia:
+            1. Usuario A arrastra el Widget 1.
+            2. El MFE del *dashboard* emite un cambio de "intención".
+            3. ¿Qué servicio (el *shell*, un *hook* global) recibe esto?
+            4. ¿Cómo se serializa y envía al "Servicio de Sincronización"?
+            5. ¿Cómo se recibe, fusiona (merge) y re-propaga el estado a Usuario B sin causar un bucle de renderizado infinito?
+
+#### Sección 3: Arquitectura de Rendimiento y Resiliencia
+
+1.  **Renderizado y Arranque en Frío:**
+    * **Decisión:** ¿SPA (Single Page Application) puro, SSR (Server-Side Rendering) del *shell*, o RSC (React Server Components)?
+    * **Justificación:** Argumenta tu elección en el contexto de un *dashboard* dinámico y personalizado. ¿Cómo impacta esto en el TTI (Time to Interactive)? ¿Cómo harás *code-splitting* (división de código) no solo a nivel de ruta, sino a nivel de *widget*?
+
+2.  **El "Kernel Offline" (Offline-First):**
+    * **Diseño:** Propón una estrategia robusta para la resiliencia.
+    * **Service Worker:** ¿Qué estrategia de caché usarás (`StaleWhileRevalidate` para los MFEs, `CacheFirst` para el *shell* y las librerías)?
+    * **Persistencia de Datos:** ¿Qué datos persistirás en **IndexedDB**? (ej. la última configuración conocida del *layout*, datos de mercado cacheados).
+    * **Cola de Mutaciones:** Si el usuario está *offline* e intenta ejecutar una orden (mutación), ¿cómo diseñarás una "cola de salida" (Outbox) que sincronice las mutaciones cuando la red vuelva?
+
+3.  **Estrategia de Pruebas y CI/CD:**
+    * **Pruebas de Contrato:** ¿Cómo asegurarás que MFE-A no rompa el contrato de API del que depende MFE-B? (ej. Pruebas de Contrato con PACT).
+    * **Entorno de CI:** ¿Cómo probarás la *integración* completa en un *pipeline* de CI? (ej. Desplegar todos los MFEs a un entorno de *staging* y correr pruebas E2E (Cypress/Playwright) contra el *shell* orquestado).
+    * **DevX (Developer Experience):** ¿Cómo podrá un desarrollador del equipo "Noticias" correr su MFE localmente, pero consumiendo los MFEs "Gráficos" y "Watchlist" de *producción* (o *staging*) para no tener que correr 10 proyectos localmente?
 
 ---
 
-## 4. Criterios de Evaluación
+### FASE 2: El Núcleo del Prototipo (Prueba de Concepto - PoC)
 
-Se evaluará tu solución con base en los siguientes pilares:
+(Formato: El repositorio de código)
 
-1.  **Gestión de Estado Asíncrono (Server State):**
-    * Maestría en el uso de TanStack Query (no solo `useQuery`, sino `useInfiniteQuery`, `queryClient`, `setQueryData`).
-    * Calidad de la estrategia de "Optimistic UI" y la lógica de *rollback*.
-    * Eficiencia en la invalidación y re-hidratación de la caché.
+No debes construir todos los *features* del manifiesto. Debes construir el **esqueleto funcional** que demuestre que los **puntos de riesgo** de tu arquitectura son viables.
 
-2.  **Rendimiento del Lado del Cliente (Client-Side Performance):**
-    * Implementación correcta de la virtualización (demostrar que el DOM no crece).
-    * Uso justificado y efectivo de la memoización (`React.memo`, `useMemo`).
-    * Impacto de la hidratación del WebSocket en el *main thread* (debe ser mínimo).
+Usa un **Monorepo** (ej. Turborepo/Nx) para estructurar este PoC.
 
-3.  **Arquitectura de Software y Código Limpio:**
-    * Uso estricto de **TypeScript** (ausencia de `any`, tipos inferidos, tipos genéricos para *hooks* y componentes).
-    * Estructura del proyecto (colocación de estado, separación de la lógica de *fetching* de la UI, encapsulación en *hooks*).
-    * Calidad de las pruebas (uso de MSW, cobertura de flujos críticos).
+#### PoC-1: El "Host Shell" y el Orquestador
 
-4.  **Conocimiento del Ecosistema:**
-    * Configuración correcta de Vite.
-    * Implementación de `React.lazy` y `Suspense`.
-    * Manejo del ciclo de vida de los WebSockets.
+* Una aplicación "Host" (ej. en `apps/shell`).
+* Debe cargar y renderizar al menos dos MFEs remotos (ej. `apps/mfe-watchlist`, `apps/mfe-charts`) usando tu estrategia de federación (ej. Module Federation).
+* **Requisito Clave:** La *composición* debe ser dinámica. El *shell* debe leer un `layout.json` (mock) al inicio y renderizar los MFEs y su posición basándose en ese JSON.
 
-## 5. Entregable
+#### PoC-2: La Comunicación Inter-MFE Desacoplada
 
-Debes entregar la URL de un repositorio de Git (GitHub) con el código fuente completo. El `README.md` debe incluir instrucciones detalladas para la instalación (`npm install`), ejecución del proyecto (`npm run dev`) y ejecución de la suite de pruebas (`npm run test`).
+* Implementa el "Bus de Eventos" o patrón de estado compartido que diseñaste en el Manifiesto.
+* **Demostración:** Al hacer clic en un ítem en `mfe-watchlist`, `mfe-charts` debe recibir el `assetId` y mostrarlo. `mfe-watchlist` **no debe** tener una importación directa o dependencia de `mfe-charts`.
 
+#### PoC-3: El Stub del "Kernel Offline"
 
-Moraleja: Esto es caspa, se puede ir pa su casa ya
+* No necesitas una implementación completa de IndexedDB.
+* **Demostración:**
+    1.  Implementa un **Service Worker** básico.
+    2.  Haz que el *shell* haga un *fetch* de datos (ej. `GET /api/markets`).
+    3.  El Service Worker debe interceptar esta llamada y cachear la respuesta (Estrategia: `StaleWhileRevalidate`).
+    4.  Demuestra (en la consola de Chrome, simulando *offline*) que si la API falla o está *offline*, la aplicación sigue cargando los datos desde la caché del SW.
+
+#### PoC-4: La Demostración de Aislamiento (Estilos y Enfoque)
+
+* **Aislamiento de Estilos:** Demuestra que los estilos de `mfe-watchlist` (ej. `h1 { color: red; }`) no afectan a `mfe-charts` (ej. usando Shadow DOM o la técnica que hayas elegido).
+* **Gestión de Foco (A11y):** Demuestra que la navegación por teclado (`Tab`) puede moverse *seamlessly* (sin interrupciones) desde el último elemento enfocable de `mfe-watchlist` al primer elemento enfocable de `mfe-charts` y viceversa, como si fueran una sola aplicación.
+
+#### PoC-5: El "Stub" de Sincronización de Estado (El Desafío)
+
+* No necesitas CRDTs.
+* **Demostración:**
+    1.  Abre la aplicación en **dos pestañas** del navegador.
+    2.  Usa un WebSocket (puedes usar un servidor de ws simple o un *mock* usando `mock-socket`) o la `BroadcastChannel` API para simular la conexión.
+    3.  Al cambiar el estado en la Pestaña 1 (ej. un *toggle* en el `mfe-watchlist`), ese cambio debe reflejarse **automáticamente** en la Pestaña 2 sin necesidad de refrescar. Esto prueba la viabilidad de la arquitectura de estado reactivo y colaborativo.
+
+## 3. Criterios de Evaluación
+
+* **Profundidad del Manifiesto (60%):** Tu capacidad para identificar problemas de segundo orden, justificar *trade-offs* complejos (no hay "respuestas correctas") y diseñar para la escalabilidad *organizacional* (DevX, CI/CD, equipos).
+* **Viabilidad del PoC (40%):** ¿El código del PoC implementa exitosamente los patrones de alto riesgo descritos en el manifiesto?
+* **Calidad del Código:** Se espera un dominio absoluto de TypeScript (Genéricos, Inferencia, Tipos Condicionales) y patrones de React (Hooks avanzados, Composición, Contexto) en el PoC.
+* **Claridad:** ¿Son el manifiesto y el código claros, mantenibles y fáciles de entender para los 10 equipos que se unirán después de ti?
+
+Moraleja: Hay que leer primero. Todo esto es caspa, ni yo soy capaz de hacerlo, se puede ir pa su casa ya
